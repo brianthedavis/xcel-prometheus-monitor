@@ -1,0 +1,41 @@
+alerting:
+  alertmanagers:
+    - scheme: http
+      static_configs:
+        - targets:
+            - alertmanager:9093
+global:
+  evaluation_interval: 20s
+  scrape_interval: 20s
+
+rule_files:
+  - alerts/*.yml
+scrape_configs:
+  - job_name: prometheus
+    relabel_configs:
+      - regex: ([^:]+)(:[0-9]+)?
+        replacement: ${1}
+        source_labels:
+          - __address__
+        target_label: instance
+    static_configs:
+      - targets:
+          - localhost:9090
+
+  - job_name: pushgateway
+    honor_labels: true
+    static_configs:
+      - targets:
+          - pushgateway:9091
+
+  - job_name: xcel-mqtt
+    metric_relabel_configs:
+      - action: drop
+        regex: ^(process_.*|go_.*|promhttp_metric_.*|scrape_.*)
+        source_labels:
+          - __name__
+    static_configs:
+      - targets:
+          - xcel-mqtt2prometheus-instant:9641
+          - xcel-mqtt2prometheus-received:9642
+          - xcel-mqtt2prometheus-delivered:9643

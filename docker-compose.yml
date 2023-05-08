@@ -1,0 +1,134 @@
+services:
+  # MQTT Broker
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    user: mosquitto
+    restart: unless-stopped
+    volumes:
+      - ./mosquitto:/mosquitto/config/
+      - mqtt-data:/mosquitto/data/
+    ports:
+      - 1883:1883
+      - 9001:9001
+
+  # Xcel Meter -> MQTT Interface
+  xcel-itron2mqtt:
+    image: ghcr.io/zaknye/xcel_itron2mqtt:main
+    container_name: xcel-itron2mqtt
+    restart: unless-stopped
+    volumes:
+      - ./certs:/opt/xcel_itron2mqtt/certs
+    depends_on:
+      - mosquitto
+    env_file:
+      - .env
+    environment:
+      - MQTT_SERVER=mosquitto
+
+  # MQTT -> Prometheus
+  xcel-mqtt2prometheus-instant:
+    image: ghcr.io/hikhvar/mqtt2prometheus:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    entrypoint:
+      - /mqtt2prometheus
+      - -log-level=info
+    volumes:
+      - ./mqtt2prometheus/instantaneous_demand.yaml:/config.yaml:ro
+    depends_on:
+      - mosquitto
+    ports:
+      - 9641:9641
+  xcel-mqtt2prometheus-received:
+    image: ghcr.io/hikhvar/mqtt2prometheus:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    entrypoint:
+      - /mqtt2prometheus
+      - -log-level=info
+      - -listen-port=9642
+    volumes:
+      - ./mqtt2prometheus/summation_received.yaml:/config.yaml:ro
+    depends_on:
+      - mosquitto
+    ports:
+      - 9642:9642
+  xcel-mqtt2prometheus-delivered:
+    image: ghcr.io/hikhvar/mqtt2prometheus:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    entrypoint:
+      - /mqtt2prometheus
+      - -log-level=info
+      - -listen-port=9643
+    volumes:
+      - ./mqtt2prometheus/summation_delivered.yaml:/config.yaml:ro
+    depends_on:
+      - mosquitto
+    ports:
+      - 9643:9643
+
+  # Prometheus
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    volumes:
+      - ./prometheus:/prometheus
+      - prom-data:/home
+    command:
+      - '--config.file=/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/home'
+      - '--storage.tsdb.retention.time=2w'
+      - '--web.enable-lifecycle'
+    ports:
+      - 9090:9090
+    depends_on:
+      - alertmanager
+    restart: always
+
+  pushgateway:
+    image: prom/pushgateway
+    container_name: pushgateway
+    restart: unless-stopped
+    expose:
+      - 9091
+    ports:
+      - 9091:9091
+
+  alertmanager:
+    image: prom/alertmanager
+    container_name: alertmanager
+    volumes:
+      - ./alertmanager:/alertmanager
+      - alertmanager-data:/home
+    command:
+      - '--config.file=/alertmanager/alertmanager.yml'
+      - '--storage.path=/home'
+    ports:
+      - 9093:9093
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - 3000:3000
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning/:/etc/grafana/provisioning/
+      - ./grafana/dashboards:/etc/grafana/dashboards
+      - ./grafana/grafana.ini:/etc/grafana/grafana.ini:ro
+    env_file:
+      - ./grafana/grafana.env
+    restart: unless-stopped
+
+
+volumes:
+  mqtt-data:
+  prom-data:
+  alertmanager-data:
+  grafana-data:

@@ -1,0 +1,22 @@
+# With grafana running, run
+#    curl -s "http://localhost:3000/api/datasources"  -u admin:password | jq  '.[]'
+# to fetch this data
+
+apiVersion: 1
+datasources:
+  - id: 1
+    uid: localPrometheus
+    orgId: 1
+    name: Prometheus
+    type: prometheus
+    typeName: Prometheus
+    typeLogoUrl: public/app/plugins/datasource/prometheus/img/prometheus_logo.svg
+    access: proxy
+    url: http://prometheus:9090
+    user: ""
+    database: ""
+    basicAuth: false
+    isDefault: true
+    jsonData:
+      httpMethod: POST
+    readOnly: false
